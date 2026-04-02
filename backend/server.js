@@ -91,6 +91,46 @@ app.post('/api/books', authenticateToken, (req, res) => {
     });
 });
 
+app.get('/api/users', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+
+  db.all('SELECT id, name, email, role, active FROM Users', [], (err, users) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(users);
+  });
+});
+
+app.put('/api/users/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.userId !== parseInt(req.params.id)) {
+    return res.sendStatus(403);
+  }
+
+  const { name, active } = req.body;
+
+  if (req.user.role === 'admin' && active !== undefined) {
+    db.run('UPDATE Users SET name = ?, active = ? WHERE id = ?',
+      [name, active ? 1 : 0, req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'User updated' });
+      });
+  } else {
+    db.run('UPDATE Users SET name = ? WHERE id = ?',
+      [name, req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'User updated' });
+      });
+  }
+});
+
+app.get('/api/users/profile', authenticateToken, (req, res) => {
+  db.get('SELECT id, name, email, role FROM Users WHERE id = ?', [req.user.userId], (err, user) => {
+    if (err || !user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
