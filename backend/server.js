@@ -55,6 +55,42 @@ app.post('/api/login', (req, res) => {
   });
 });
 
+app.get('/api/books', (req, res) => {
+  const { search } = req.query;
+  let query = 'SELECT * FROM Books';
+  let params = [];
+
+  if (search) {
+    query += ' WHERE title LIKE ? OR author LIKE ?';
+    params = [`%${search}%`, `%${search}%`];
+  }
+
+  db.all(query, params, (err, books) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(books);
+  });
+});
+
+app.get('/api/books/:id', (req, res) => {
+  db.get('SELECT * FROM Books WHERE id = ?', [req.params.id], (err, book) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+    res.json(book);
+  });
+});
+
+app.post('/api/books', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.sendStatus(403);
+  const { title, author, description, isbn } = req.body;
+
+  db.run('INSERT INTO Books (title, author, description, isbn, status) VALUES (?, ?, ?, ?, ?)',
+    [title, author, description, isbn, 'available'],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, title, author, description, isbn, status: 'available' });
+    });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
