@@ -2,10 +2,16 @@ name: Build and Publish Docker Images
 
 on:
   release:
-    types: [created]
+    types: [published] # 建议使用 published，确保 release 已定稿
+  push:
+    branches:
+      - main # 每次合并到主分支也自动构建，方便测试
+    tags:
+      - 'v*' # 支持手动推送 v1.0.0 这种标签触发
 
 env:
   REGISTRY: ghcr.io
+  # 强制转为小写，防止因为 GitHub 用户名包含大写字母导致 Docker 报错
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -14,6 +20,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # 现代构建建议开启
 
     steps:
       - name: Checkout repository
@@ -29,39 +36,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # --- 关键修改：后端元数据提取 ---
       - name: Extract metadata for Backend
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
-          flavor: |
-            latest=auto
           tags: |
+            # 1. 如果是 Release，生成 v1.2.3, v1.2, v1 等标签
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=tag
-            type=sha,prefix={{branch}}-
+            # 2. 每次构建都生成带 sha 的标签（修复了你之前的报错）
+            type=sha,prefix=sha-,format=short
+            # 3. 如果是主分支，标记为 latest
+            type=edge,branch=main
+            # 4. 如果是发布 Release，也可以额外标记为 latest
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
+      # --- 前端元数据提取 (与后端一致) ---
       - name: Extract metadata for Frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
-          flavor: |
-            latest=auto
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=tag
-            type=sha,prefix={{branch}}-
+            type=sha,prefix=sha-,format=short
+            type=edge,branch=main
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          file: ./backend/Dockerfile
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
@@ -72,14 +80,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
-          file: ./frontend/Dockerfile
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Image digest
-        run: |
-          echo "Backend digest: ${{ steps.meta-backend.outputs.digest }}"
-          echo "Frontend digest: ${{ steps.meta-frontend.outputs.digest }}"
