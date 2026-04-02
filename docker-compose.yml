@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: library-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DB_DIR=/app/data
+    volumes:
+      - library-data:/app/data
+    networks:
+      - library-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: library-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - API_URL=http://localhost:3001/api
+    depends_on:
+      - backend
+    networks:
+      - library-network
+
+volumes:
+  library-data:
+    driver: local
+
+networks:
+  library-network:
+    driver: bridge

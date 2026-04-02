@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-xdu-spm}/backend:latest
+    container_name: library-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DB_DIR=/app/data
+    volumes:
+      - library-data:/app/data
+    networks:
+      - library-network
+
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-xdu-spm}/frontend:latest
+    container_name: library-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - API_URL=http://localhost:3001/api
+    depends_on:
+      - backend
+    networks:
+      - library-network
+
+volumes:
+  library-data:
+    driver: local
+
+networks:
+  library-network:
+    driver: bridge
