@@ -22,9 +22,9 @@ function initDatabase() {
       title TEXT NOT NULL,
       author TEXT NOT NULL,
       description TEXT,
-      isbn TEXT,
+      isbn TEXT UNIQUE,
       status TEXT DEFAULT 'available' CHECK(status IN ('available', 'checked_out'))
-    )`);
+    `);
 
     const salt = bcrypt.genSaltSync(10);
     const users = [
@@ -53,6 +53,13 @@ function initDatabase() {
     const bookStmt = db.prepare('INSERT OR IGNORE INTO Books (title, author, description, isbn, status) VALUES (?, ?, ?, ?, ?)');
     books.forEach(book => bookStmt.run(book.title, book.author, book.description, book.isbn, book.status));
     bookStmt.finalize();
+
+    db.run(`DELETE FROM Books WHERE id NOT IN (
+      SELECT MIN(id) FROM Books GROUP BY isbn
+    )`, function(err) {
+      if (err) console.error('Error cleaning duplicate books:', err);
+      else if (this.changes > 0) console.log(`Cleaned up ${this.changes} duplicate books`);
+    });
 
     console.log('Database initialized with mock data');
   });
