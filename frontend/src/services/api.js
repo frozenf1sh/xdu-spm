@@ -1,4 +1,11 @@
-const API_BASE = 'http://localhost:3001/api'
+const getApiBase = () => {
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.VITE_API_URL) {
+    return window.__ENV__.VITE_API_URL;
+  }
+  return import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+};
+
+const API_BASE = getApiBase();
 
 const request = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token')

@@ -13,6 +13,8 @@
 - [Release 1 范围](#release-1-范围)
 - [软件过程](#软件过程)
 - [快速开始](#快速开始)
+- [Docker部署](#docker部署)
+- [CI/CD](#cicd)
 - [演示账号](#演示账号)
 - [项目结构](#项目结构)
 - [API文档](#api文档)
@@ -34,6 +36,9 @@
 | **数据库** | SQLite 3 |
 | **通信** | RESTful APIs |
 | **架构** | Monorepo (`/frontend` + `/backend`) |
+| **容器化** | Docker + Docker Compose |
+| **CI/CD** | GitHub Actions |
+| **镜像仓库** | GitHub Container Registry (GHCR) |
 
 ---
 
@@ -162,6 +167,121 @@ npm run dev
 
 ---
 
+## 🐳 Docker部署
+
+### 使用Docker Compose（开发环境）
+
+一键启动前后端服务：
+
+```bash
+docker-compose up -d --build
+```
+
+服务访问地址：
+- 前端：http://localhost:3000
+- 后端API：http://localhost:3001
+
+查看日志：
+```bash
+docker-compose logs -f
+```
+
+停止服务：
+```bash
+docker-compose down
+```
+
+### 使用Docker Compose（生产环境）
+
+使用GHCR上的预构建镜像：
+
+```bash
+# 设置仓库所有者
+export GITHUB_REPOSITORY_OWNER=your-username
+
+# 启动服务
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### 数据持久化
+
+SQLite数据库通过Docker volume持久化：
+- Volume名称：`library-data`
+- 数据不会因容器重启而丢失
+
+### 构建镜像
+
+手动构建本地镜像：
+
+```bash
+# 构建后端镜像
+cd backend
+docker build -t library-backend:latest .
+
+# 构建前端镜像
+cd ../frontend
+docker build -t library-frontend:latest .
+```
+
+---
+
+## 🔄 CI/CD
+
+### GitHub Actions 工作流
+
+项目配置了两个GitHub Actions工作流：
+
+#### 1. CI工作流 (`.github/workflows/ci.yml`)
+
+- **触发条件**：推送到`main`分支或创建PR到`main`分支
+- **功能**：自动构建前后端Docker镜像，验证代码可构建性
+
+#### 2. Release工作流 (`.github/workflows/release.yml`)
+
+- **触发条件**：创建新Release
+- **功能**：自动构建并推送Docker镜像到GHCR
+
+### 镜像标签策略
+
+使用`docker/metadata-action`自动生成标签：
+
+| 标签类型 | 示例 | 说明 |
+|----------|------|------|
+| SemVer | `v1.0.0`, `1.0`, `1` | 基于Release版本 |
+| Git SHA | `main-abc123d` | 基于分支和提交哈希 |
+| Latest | `latest` | 最新版本 |
+
+### 使用GHCR镜像
+
+#### 配置GitHub Packages访问
+
+1. 创建Personal Access Token (PAT)，勾选`write:packages`权限
+2. 登录GHCR：
+```bash
+echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+```
+
+#### 拉取镜像
+
+```bash
+# 后端镜像
+docker pull ghcr.io/your-username/xdu-spm/backend:latest
+
+# 前端镜像
+docker pull ghcr.io/your-username/xdu-spm/frontend:latest
+```
+
+#### 创建Release步骤
+
+1. 进入GitHub仓库的"Releases"页面
+2. 点击"Draft a new release"
+3. 创建新标签（如`v1.0.0`）
+4. 填写Release标题和说明
+5. 点击"Publish release"
+6. GitHub Actions将自动构建并推送镜像
+
+---
+
 ## 👤 演示账号
 
 所有账号的密码均为：`123456`
@@ -182,6 +302,7 @@ xdu-spm/
 │   ├── package.json
 │   ├── database.js          # SQLite 数据库初始化
 │   ├── server.js            # Express 服务器 + REST API
+│   ├── Dockerfile           # 后端Docker镜像构建文件
 │   └── library.db           # SQLite 数据库文件（运行时生成）
 ├── frontend/
 │   ├── package.json
@@ -189,6 +310,9 @@ xdu-spm/
 │   ├── tailwind.config.js
 │   ├── postcss.config.js
 │   ├── index.html
+│   ├── Dockerfile           # 前端Docker镜像构建文件
+│   ├── nginx.conf           # Nginx配置
+│   ├── docker-entrypoint.sh # 容器入口脚本
 │   └── src/
 │       ├── main.jsx         # 应用入口
 │       ├── App.jsx          # 路由配置
@@ -205,6 +329,12 @@ xdu-spm/
 │       └── components/
 │           ├── BookDetail.jsx      # 图书详情弹窗
 │           └── ProfileModal.jsx    # 个人资料弹窗
+├── .github/
+│   └── workflows/
+│       ├── ci.yml             # CI工作流（PR和push触发）
+│       └── release.yml        # Release工作流（构建并推送GHCR）
+├── docker-compose.yml         # 开发环境Docker Compose
+├── docker-compose.prod.yml    # 生产环境Docker Compose
 ├── .gitignore
 └── README.md
 ```
@@ -240,6 +370,7 @@ xdu-spm/
 
 ## 📊 Release 1 验收清单
 
+### 核心功能
 - [x] 后端Express服务正常运行
 - [x] SQLite数据库和Mock数据初始化
 - [x] RESTful API实现完整
@@ -249,6 +380,16 @@ xdu-spm/
 - [x] 读者仪表板（图书搜索、详情、个人资料）
 - [x] 管理员仪表板（用户管理、添加图书）
 - [x] 图书管理员仪表板（书目查看、筛选）
+
+### DevOps
+- [x] Dockerfile配置（前后端）
+- [x] Docker Compose配置（开发/生产）
+- [x] GitHub Actions CI工作流
+- [x] GitHub Actions Release工作流
+- [x] GHCR自动镜像推送
+- [x] 镜像标签自动生成（docker/metadata-action）
+
+### 软件过程
 - [x] Git分支管理规范
 - [x] 提交信息符合Conventional Commits
 
