@@ -402,4 +402,4 @@ xdu-spm/
 
 ---
 
-**© 2024 XDU Library Management System Team**
+**© 2026 XDU Library Management System Team**

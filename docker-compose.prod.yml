@@ -3,8 +3,8 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-xdu-spm}/backend:latest
     container_name: library-backend
     restart: unless-stopped
-    ports:
-      - "3001:3001"
+    # ports:
+    #   - "3001:3001"
     environment:
       - NODE_ENV=production
       - DB_DIR=/app/data
