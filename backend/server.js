@@ -1,0 +1,60 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { db, initDatabase } = require('./database');
+
+const app = express();
+const PORT = 3001;
+const JWT_SECRET = 'library-secret-key-2024';
+
+app.use(cors());
+app.use(bodyParser.json());
+
+initDatabase();
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+app.post('/api/register', (req, res) => {
+  const { name, email, password, role = 'reader' } = req.body;
+  const hashedPassword = bcrypt.hashSync(password, 10);
+
+  db.run('INSERT INTO Users (name, email, password, role) VALUES (?, ?, ?, ?)',
+    [name, email, hashedPassword, role],
+    function(err) {
+      if (err) return res.status(400).json({ error: 'Email already exists' });
+      const token = jwt.sign({ userId: this.lastID, email, role }, JWT_SECRET);
+      res.json({ token, user: { id: this.lastID, name, email, role } });
+    });
+});
+
+app.post('/api/login', (req, res) => {
+  const { email, password } = req.body;
+
+  db.get('SELECT * FROM Users WHERE email = ?', [email], (err, user) => {
+    if (err || !user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user.active) return res.status(403).json({ error: 'Account disabled' });
+
+    if (bcrypt.compareSync(password, user.password)) {
+      const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET);
+      res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    } else {
+      res.status(401).json({ error: 'Invalid credentials' });
+    }
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
